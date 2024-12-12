@@ -13,8 +13,29 @@ const geistMono = localFont({
 });
 
 export const metadata = {
-  title: "食費計算ツール",
+  title: {
+    default: "食費計算ツール",
+    template: "%s | 食費計算ツール",
+  },
   description: "自炊とお店での購入を比較する食費計算ツール",
+  keywords: ["食費", "家計簿", "自炊", "コスト比較", "節約"],
+  openGraph: {
+    title: "食費計算ツール",
+    description: "自炊とお店での購入を比較する食費計算ツール",
+    type: "website",
+    locale: "ja_JP",
+    siteName: "食費計算ツール",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  // SNSカード用のメタデータ
+  twitter: {
+    card: "summary_large_image",
+    title: "食費計算ツール",
+    description: "自炊とお店での購入を比較する食費計算ツール",
+  },
 };
 
 export default function RootLayout({ children }) {
