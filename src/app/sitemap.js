@@ -1,4 +1,4 @@
-import { PRESET_RECIPES } from "@/constants/recipes";
+import { PRESET_RECIPES } from "@/constants/presetRecipes";
 
 export default function sitemap() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://your-domain.com";
