@@ -1,73 +1,104 @@
 "use client";
 
 import Script from "next/script";
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  ChefHat,
-  ShoppingCart,
-  PlusCircle,
-  MinusCircle,
-  Book,
-} from "lucide-react";
-import { PRESET_RECIPES } from "@/lib/constants/recipes";
+import { ChefHat, PlusCircle, MinusCircle } from "lucide-react";
+
+import { PRESET_RECIPES } from "@/constants/presetRecipes";
+import { useFoodCostCalculator } from "../hooks/useFoodCostCalculator";
+import PriceCard from "./ui/PriceCard";
+import RecipeButton from "./ui/RecipeButton";
+
+const InputField = ({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max,
+  suffix,
+  width = "w-32",
+}) => (
+  <div className="flex items-center gap-2">
+    <label>{label}</label>
+    <input
+      type="number"
+      className={`border rounded p-2 ${width}`}
+      value={value}
+      onChange={onChange}
+      min={min}
+      max={max}
+      required
+      aria-label={`${label}を入力`}
+    />
+    <span>{suffix}</span>
+  </div>
+);
+
+const formatPrice = (price) => {
+  return new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: "JPY",
+    minimumFractionDigits: 0,
+  }).format(price);
+};
 
 const FoodCostComparison = () => {
-  const [ingredients, setIngredients] = useState([
-    { name: "", quantity: 1, unit: "g", price: 0 },
-  ]);
-  const [storeDishPrice, setStoreDishPrice] = useState("");
-  const [storeOverhead, setStoreOverhead] = useState(30);
-  const [selectedRecipe, setSelectedRecipe] = useState("");
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const loadPreset = (recipeName) => {
-    if (PRESET_RECIPES[recipeName]) {
-      const recipe = PRESET_RECIPES[recipeName];
-      setIngredients(recipe.ingredients);
-      setStoreDishPrice(recipe.storePrice);
-      setStoreOverhead(recipe.overhead);
-      setSelectedRecipe(recipeName);
+  const {
+    ingredients,
+    storeDishPrice,
+    storeOverhead,
+    calculations,
+    setStoreDishPrice,
+    setStoreOverhead,
+    addIngredient,
+    removeIngredient,
+    updateIngredient,
+    setAllIngredients,
+    reset,
+  } = useFoodCostCalculator();
+
+  const loadPreset = useCallback((recipeName) => {
+    const recipe = PRESET_RECIPES[recipeName];
+    setSelectedRecipe(recipeName);
+    setAllIngredients(recipe.ingredients);
+    setStoreDishPrice(recipe.storePrice || "");
+    setStoreOverhead(recipe.overhead || "30");
+  }, [setAllIngredients, setStoreDishPrice, setStoreOverhead]);
+
+  const handleStoreInputChange = (e) => {
+    const value = e.target.value.trim();
+    if (value === "") {
+      setStoreDishPrice("");
+      setError(null);
+      return;
+    }
+
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue >= 0) {
+      setStoreDishPrice(value);
+      setError(null);
+    } else {
+      setError("正しい価格を入力してください");
     }
   };
 
-  const addIngredient = () => {
-    setIngredients([
-      ...ingredients,
-      { name: "", quantity: 1, unit: "g", price: 0 },
-    ]);
-  };
-
-  const removeIngredient = (index) => {
-    const newIngredients = ingredients.filter((_, i) => i !== index);
-    setIngredients(newIngredients);
-  };
-
-  const updateIngredient = (index, field, value) => {
-    const newIngredients = ingredients.map((ingredient, i) => {
-      if (i === index) {
-        return { ...ingredient, [field]: value };
-      }
-      return ingredient;
-    });
-    setIngredients(newIngredients);
-  };
-
-  const calculateHomeCookingCost = () => {
-    return ingredients.reduce((total, ingredient) => {
-      return total + (parseFloat(ingredient.price) || 0);
-    }, 0);
-  };
-
-  const calculateStoreBaseCost = () => {
-    const storePrice = parseFloat(storeDishPrice) || 0;
-    const overheadPercent = parseFloat(storeOverhead) || 0;
-    const baseCost = (storePrice * (100 - overheadPercent)) / 100;
-    return baseCost;
+  const handleOverheadChange = (e) => {
+    const value = e.target.value;
+    if (!isNaN(value) && value >= 0 && value <= 100) {
+      setStoreOverhead(value);
+      setError(null);
+    } else {
+      setError("経費率は0から100の間で入力してください");
+    }
   };
 
   return (
-    <>
+    <React.Fragment>
       <Script
         id="schema-recipe-calculator"
         type="application/ld+json"
@@ -91,195 +122,135 @@ const FoodCostComparison = () => {
           }),
         }}
       />
+      <div className="max-w-4xl mx-auto p-4">
+        {/* 1. プリセットレシピ選択 (最上部に配置) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+          {Object.keys(PRESET_RECIPES).map((recipeName) => (
+            <RecipeButton
+              key={recipeName}
+              name={recipeName}
+              isSelected={selectedRecipe === recipeName}
+              onClick={() => loadPreset(recipeName)}
+            />
+          ))}
+        </div>
 
-      <div
-        className="max-w-4xl mx-auto p-4"
-        role="main"
-        aria-label="食費計算ツール"
-      >
-        <h1 className="text-2xl font-bold mb-6 text-center">食費比較計算機</h1>
-        {/* プリセットレシピセクション */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle
-              className="flex items-center gap-2"
-              aria-label="プリセットレシピ選択"
-            >
-              <Book className="h-6 w-6" aria-hidden="true" />
-              プリセットレシピ
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className="grid grid-cols-2 md:grid-cols-4 gap-2"
-              role="group"
-              aria-label="レシピ一覧"
-            >
-              {Object.keys(PRESET_RECIPES).map((recipeName) => (
-                <button
-                  key={recipeName}
-                  onClick={() => loadPreset(recipeName)}
-                  aria-label={`${recipeName}を選択`}
-                  className={`p-2 rounded border ${
-                    selectedRecipe === recipeName
-                      ? "bg-blue-500 text-white"
-                      : "bg-white hover:bg-gray-50"
-                  }`}
-                >
-                  {recipeName}
-                </button>
-              ))}
+        {/* 2. 計算結果 (すぐに見える位置に配置) */}
+        <div className="grid md:grid-cols-3 gap-4">
+          <PriceCard 
+            title="自宅での調理費用"
+            amount={formatPrice(calculations.homeCookingCost)}
+            bgColor="bg-blue-50"
+          />
+          <PriceCard 
+            title="お店の原価（推定）"
+            amount={formatPrice(calculations.storeBaseCost)}
+            bgColor="bg-green-50"
+          />
+          <PriceCard 
+            title="価格差"
+            amount={formatPrice(calculations.priceDifference)}
+            bgColor="bg-yellow-50"
+          />
+        </div>
+
+        {/* 3. 詳細設定 (アコーディオンで折りたたみ可能) */}
+        <details className="mt-4">
+          <summary className="cursor-pointer font-bold mb-4">詳細設定</summary>
+          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex gap-4 items-center">
+              <InputField
+                label="お店の価格"
+                value={storeDishPrice}
+                onChange={handleStoreInputChange}
+                suffix="円"
+              />
+              <InputField
+                label="経費率"
+                value={storeOverhead}
+                onChange={handleOverheadChange}
+                suffix="%"
+                width="w-24"
+              />
             </div>
-          </CardContent>
-        </Card>
-        {/* 自炊セクション */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ChefHat className="h-6 w-6" />
-              自炊コスト計算
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4" role="group" aria-label="材料リスト">
-              {ingredients.map((ingredient, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    aria-label={`材料${index + 1}の名前`}
-                    placeholder="材料名"
-                    className="border rounded p-2 w-1/3"
-                    value={ingredient.name}
-                    onChange={(e) =>
-                      updateIngredient(index, "name", e.target.value)
-                    }
-                  />
-                  <input
-                    type="number"
-                    aria-label={`材料${index + 1}の数量`}
-                    className="border rounded p-2 w-20"
-                    value={ingredient.quantity}
-                    onChange={(e) =>
-                      updateIngredient(index, "quantity", e.target.value)
-                    }
-                  />
-                  <select
-                    className="border rounded p-2"
-                    value={ingredient.unit}
-                    onChange={(e) =>
-                      updateIngredient(index, "unit", e.target.value)
-                    }
-                  >
-                    <option value="g">g</option>
-                    <option value="ml">ml</option>
-                    <option value="個">個</option>
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="価格"
-                    className="border rounded p-2 w-24"
-                    value={ingredient.price}
-                    onChange={(e) =>
-                      updateIngredient(index, "price", e.target.value)
-                    }
-                  />
-                  <span>円</span>
+            {/* 材料リストはここに配置 */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ChefHat className="h-6 w-6" />
+                  自炊コスト計算
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4" role="group" aria-label="材料リスト">
+                  {ingredients.map((ingredient, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        aria-label={`材料${index + 1}の名前`}
+                        placeholder="材料名"
+                        className="border rounded p-2 w-1/3"
+                        value={ingredient.name}
+                        onChange={(e) =>
+                          updateIngredient(index, "name", e.target.value)
+                        }
+                      />
+                      <input
+                        type="number"
+                        aria-label={`材料${index + 1}の数量`}
+                        className="border rounded p-2 w-20"
+                        value={ingredient.quantity}
+                        onChange={(e) =>
+                          updateIngredient(index, "quantity", e.target.value)
+                        }
+                      />
+                      <select
+                        className="border rounded p-2"
+                        value={ingredient.unit}
+                        onChange={(e) =>
+                          updateIngredient(index, "unit", e.target.value)
+                        }
+                      >
+                        <option value="g">g</option>
+                        <option value="ml">ml</option>
+                        <option value="個">個</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="価格"
+                        className="border rounded p-2 w-24"
+                        value={ingredient.price}
+                        onChange={(e) =>
+                          updateIngredient(index, "price", e.target.value)
+                        }
+                      />
+                      <span>円</span>
+                      <button
+                        aria-label={`材料${index + 1}を削除`}
+                        title={`材料${index + 1}を削除`}
+                        onClick={() => removeIngredient(index)}
+                        className="p-1 text-red-500"
+                      >
+                        <MinusCircle className="h-5 w-5" />
+                      </button>
+                    </div>
+                  ))}
                   <button
-                    onClick={() => removeIngredient(index)}
-                    className="p-1 text-red-500"
+                    onClick={() =>
+                      addIngredient({ name: "", price: "", unit: "" })
+                    }
+                    className="flex items-center gap-2 text-blue-500"
                   >
-                    <MinusCircle className="h-5 w-5" />
+                    <PlusCircle className="h-5 w-5" />
+                    材料を追加
                   </button>
                 </div>
-              ))}
-              <button
-                onClick={addIngredient}
-                className="flex items-center gap-2 text-blue-500"
-              >
-                <PlusCircle className="h-5 w-5" />
-                材料を追加
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-        {/* お店での購入セクション */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-6 w-6" />
-              お店での購入コスト
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  placeholder="お店の価格"
-                  className="border rounded p-2 w-32"
-                  value={storeDishPrice}
-                  onChange={(e) => setStoreDishPrice(e.target.value)}
-                />
-                <span>円</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label>経費率：</label>
-                <input
-                  type="number"
-                  className="border rounded p-2 w-20"
-                  value={storeOverhead}
-                  onChange={(e) => setStoreOverhead(e.target.value)}
-                />
-                <span>%</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        {/* 比較結果 */}
-        <Card>
-          <CardHeader>
-            <CardTitle aria-label="計算結果">比較結果</CardTitle>
-          </CardHeader>
-          <CardContent aria-live="polite">
-            <div className="space-y-4">
-              <Alert>
-                <AlertDescription>
-                  <div className="flex justify-between items-center">
-                    <span>自炊コスト：</span>
-                    <span className="font-bold">
-                      {calculateHomeCookingCost()}円
-                    </span>
-                  </div>
-                </AlertDescription>
-              </Alert>
-              <Alert>
-                <AlertDescription>
-                  <div className="flex justify-between items-center">
-                    <span>お店の原価（推定）：</span>
-                    <span className="font-bold">
-                      {calculateStoreBaseCost().toFixed(0)}円
-                    </span>
-                  </div>
-                </AlertDescription>
-              </Alert>
-              <Alert>
-                <AlertDescription>
-                  <div className="flex justify-between items-center">
-                    <span>価格差：</span>
-                    <span className="font-bold">
-                      {(
-                        parseFloat(storeDishPrice) - calculateHomeCookingCost()
-                      ).toFixed(0)}
-                      円
-                    </span>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </details>
       </div>
-    </>
+    </React.Fragment>
   );
 };
 
